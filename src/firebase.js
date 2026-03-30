@@ -34,11 +34,11 @@ import { getDatabase, ref, set, onValue, off, get } from 'firebase/database'
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyBYVHQYKVFngOrFtfe_LZed0EXZSIanlAc",
   authDomain: "obracontrol-eidos.firebaseapp.com",
-  databaseURL: "https://obracontrol-eidos-default-rtdb.firebaseio.com"
+  databaseURL: "https://obracontrol-eidos-default-rtdb.firebaseio.com",
   projectId: "obracontrol-eidos",
   storageBucket: "obracontrol-eidos.firebasestorage.app",
   messagingSenderId: "1028182070341",
-  appId: "1:1028182070341:web:2e1a122410665206f03f2c"
+  appId: "1:1028182070341:web:2e1a122410665206f03f2c",
 }
 
 // Detectar si Firebase esta configurado (no tiene valores placeholder)
