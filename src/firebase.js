@@ -32,13 +32,12 @@ import { getDatabase, ref, set, onValue, off, get } from 'firebase/database'
 
 // REEMPLAZA ESTOS VALORES CON LOS DE TU PROYECTO FIREBASE
 const FIREBASE_CONFIG = {
-  apiKey:            "TU_API_KEY",
-  authDomain:        "TU_PROYECTO.firebaseapp.com",
-  databaseURL:       "https://TU_PROYECTO-default-rtdb.firebaseio.com",
-  projectId:         "TU_PROYECTO",
-  storageBucket:     "TU_PROYECTO.appspot.com",
-  messagingSenderId: "TU_SENDER_ID",
-  appId:             "TU_APP_ID",
+  apiKey: "AIzaSyBYVHQYKVFngOrFtfe_LZed0EXZSIanlAc",
+  authDomain: "obracontrol-eidos.firebaseapp.com",
+  projectId: "obracontrol-eidos",
+  storageBucket: "obracontrol-eidos.firebasestorage.app",
+  messagingSenderId: "1028182070341",
+  appId: "1:1028182070341:web:2e1a122410665206f03f2c"
 }
 
 // Detectar si Firebase esta configurado (no tiene valores placeholder)
