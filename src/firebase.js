@@ -16,7 +16,7 @@ import { getDatabase, ref, set, onValue, off, get } from 'firebase/database'
 const firebaseConfig = {
   apiKey: "AIzaSyBYVHQYKVFngOrFtfe_LZed0EXZSIanlAc",
   authDomain: "obracontrol-eidos.firebaseapp.com",
-  databaseURL: https://obracontrol-eidos-default-rtdb.firebaseio.com/,
+  databaseURL: https://obracontrol-eidos-default-rtdb.firebaseio.com,
   projectId: "obracontrol-eidos",
   storageBucket: "obracontrol-eidos.firebasestorage.app",
   messagingSenderId: "1028182070341",
