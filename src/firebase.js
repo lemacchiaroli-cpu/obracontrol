@@ -1,56 +1,37 @@
 // OBRACONTROL — Firebase Realtime Database
 //
-// INSTRUCCIONES DE CONFIGURACION (solo una vez, ~15 minutos):
-//
-// PASO 1: Ir a https://console.firebase.google.com
-// PASO 2: "Agregar proyecto" → nombre: obracontrol → sin Google Analytics → Crear
-// PASO 3: Build → Realtime Database → "Crear base de datos"
-//         → Ubicacion: us-central1 → "Iniciar en modo de prueba" → Listo
-// PASO 4: Icono </> (Web) → nombre: obracontrol → Registrar app
-//         → Copiar el objeto firebaseConfig que aparece
-// PASO 5: Reemplazar los valores de FIREBASE_CONFIG abajo con los tuyos
-// PASO 6: Realtime Database → Reglas → pegar esto y publicar:
-//
-//    ".read": true,  ".write": true
-//    (envolverlo en: { "rules": { ".read": true, ".write": true } } )
-//
-// PASO 7: Subir firebase.js actualizado a GitHub → Vercel redeploya automatico
-//
-// REGLAS COMPLETAS PARA COPIAR EN FIREBASE (Realtime DB → Reglas):
-// Pegar exactamente esto (sin las barras //):
-//   INICIO_REGLAS
-//   {
-//     "rules": {
-//       ".read": true,
-//       ".write": true
-//     }
-//   }
-//   FIN_REGLAS
+// INSTRUCCIONES DE CONFIGURACION (solo una vez):
+// PASO 1: console.firebase.google.com → Agregar proyecto → obracontrol
+// PASO 2: Build → Realtime Database → Crear base de datos → modo de prueba
+// PASO 3: Icono </> → registrar app → copiar firebaseConfig
+// PASO 4: Reemplazar valores de FIREBASE_CONFIG abajo
+// PASO 5: Realtime Database → Reglas → pegar y publicar:
+//         { "rules": { ".read": true, ".write": true } }
+// PASO 6: Subir a GitHub → Vercel redeploya automatico
 
 import { initializeApp } from 'firebase/app'
 import { getDatabase, ref, set, onValue, off, get } from 'firebase/database'
 
-// REEMPLAZA ESTOS VALORES CON LOS DE TU PROYECTO FIREBASE
-const FIREBASE_CONFIG = {
+// ── REEMPLAZAR CON LOS VALORES DE TU PROYECTO FIREBASE ───────────────────────
+const firebaseConfig = {
   apiKey: "AIzaSyBYVHQYKVFngOrFtfe_LZed0EXZSIanlAc",
   authDomain: "obracontrol-eidos.firebaseapp.com",
-  databaseURL: "https://obracontrol-eidos-default-rtdb.firebaseio.com",
+  databaseURL: https://obracontrol-eidos-default-rtdb.firebaseio.com/,
   projectId: "obracontrol-eidos",
   storageBucket: "obracontrol-eidos.firebasestorage.app",
   messagingSenderId: "1028182070341",
-  appId: "1:1028182070341:web:2e1a122410665206f03f2c",
-}
+  appId: "1:1028182070341:web:2e1a122410665206f03f2c"
+};
+// ─────────────────────────────────────────────────────────────────────────────
 
-// Detectar si Firebase esta configurado (no tiene valores placeholder)
 export const FIREBASE_HABILITADO = !FIREBASE_CONFIG.apiKey.includes('TU_')
 
-let app = null
-let db  = null
+let db = null
 
 if (FIREBASE_HABILITADO) {
   try {
-    app = initializeApp(FIREBASE_CONFIG)
-    db  = getDatabase(app)
+    const app = initializeApp(FIREBASE_CONFIG)
+    db = getDatabase(app)
     console.log('[ObraControl] Firebase conectado OK')
   } catch (e) {
     console.warn('[ObraControl] Error al conectar Firebase:', e.message)
@@ -70,6 +51,7 @@ export const KEYS = {
   historial:   ROOT + '/historial',
 }
 
+// ── Escribir en Firebase ──────────────────────────────────────────────────────
 export async function fbSet(key, value) {
   if (!FIREBASE_HABILITADO || !db) return false
   try {
@@ -83,17 +65,7 @@ export async function fbSet(key, value) {
   }
 }
 
-export async function fbGet(key) {
-  if (!FIREBASE_HABILITADO || !db) return null
-  try {
-    const snap = await get(ref(db, key))
-    return snap.exists() ? snap.val() : null
-  } catch (e) {
-    console.warn('[Firebase] Error leyendo ' + key + ':', e.message)
-    return null
-  }
-}
-
+// ── Suscribirse a cambios en tiempo real ─────────────────────────────────────
 export function fbSubscribe(key, callback) {
   if (!FIREBASE_HABILITADO || !db) return function() {}
   console.log('[Firebase] Suscribiendo a:', key)
@@ -107,18 +79,20 @@ export function fbSubscribe(key, callback) {
   return function() { off(r) }
 }
 
-export async function initFirebaseIfEmpty(seeds) {
+// ── Seed inicial: solo escribe si la coleccion esta vacia ─────────────────────
+// Se llama DESPUES de suscribirse, no antes
+export async function seedIfEmpty(key, value) {
   if (!FIREBASE_HABILITADO || !db) return false
   try {
-    const snap = await get(ref(db, ROOT))
+    const snap = await get(ref(db, key))
     if (!snap.exists()) {
-      await set(ref(db, ROOT), seeds)
-      console.log('[Firebase] Datos iniciales subidos OK')
+      await set(ref(db, key), value)
+      console.log('[Firebase] Seed cargado:', key)
       return true
     }
     return false
   } catch (e) {
-    console.warn('[Firebase] Error en initFirebaseIfEmpty:', e.message)
+    console.warn('[Firebase] Error en seed:', key, e.message)
     return false
   }
 }
