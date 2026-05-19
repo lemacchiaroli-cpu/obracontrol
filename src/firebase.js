@@ -73,10 +73,12 @@ export const KEYS = {
 export async function fbSet(key, value) {
   if (!FIREBASE_HABILITADO || !db) return false
   try {
+    console.log('[Firebase] Escribiendo:', key)
     await set(ref(db, key), value)
+    console.log('[Firebase] Escritura OK:', key)
     return true
   } catch (e) {
-    console.warn('[Firebase] Error escribiendo ' + key + ':', e.message)
+    console.error('[Firebase] ERROR al escribir:', key, e.message)
     return false
   }
 }
@@ -94,9 +96,13 @@ export async function fbGet(key) {
 
 export function fbSubscribe(key, callback) {
   if (!FIREBASE_HABILITADO || !db) return function() {}
+  console.log('[Firebase] Suscribiendo a:', key)
   const r = ref(db, key)
   onValue(r, function(snap) {
-    if (snap.exists()) callback(snap.val())
+    if (snap.exists()) {
+      console.log('[Firebase] Dato recibido de:', key)
+      callback(snap.val())
+    }
   })
   return function() { off(r) }
 }
