@@ -1,14 +1,14 @@
 import { useState, useCallback, useRef } from 'react'
-import { C, Sheet, Btn, Field, SelectField, EstadoTag, PrioTag, Avatar, AdjPills, AddButton, Chip, ChipRow, SectionLabel, Alert } from '../ui.jsx'
+import { C, Sheet, Btn, Field, SelectField, EstadoTag, PrioTag, Avatar, AdjPills, AddButton, Chip, ChipRow, SectionLabel } from '../ui.jsx'
 import { ESTADOS, PRIORIDADES, TRANSICIONES, fmtDate, fmtDateShort, fmtTS, isOverdue, todayISO } from '../store.js'
 
 // ── Modal detalle de tarea ─────────────────────────────────────────────────────
-function ModalDetalle({ tarea, usuarios, catList, usuActivo, esGral, cambiarEstado, onClose, onEditar, tareasObra, tareasGral }) {
-  const [showCambio, setShowCambio] = useState(false)
-  const [nuevoEst,   setNuevoEst]   = useState('')
-  const [comentario, setComentario] = useState('')
-  const [error,      setError]      = useState('')
-  const fileRef = useRef()
+function ModalDetalle({ tarea, usuarios, catList, usuActivo, esGral, cambiarEstado, onClose, onEditar, onEliminar, tareasObra, tareasGral }) {
+  const [showCambio,  setShowCambio]  = useState(false)
+  const [nuevoEst,    setNuevoEst]    = useState('')
+  const [comentario,  setComentario]  = useState('')
+  const [error,       setError]       = useState('')
+  const [confirmDel,  setConfirmDel]  = useState(false)
 
   const tActual = (esGral ? tareasGral : tareasObra).find(t => t.id === tarea.id) || tarea
 
@@ -19,14 +19,23 @@ function ModalDetalle({ tarea, usuarios, catList, usuActivo, esGral, cambiarEsta
   const esCrea   = usuActivo === tActual.creadoPorId
   const trans    = TRANSICIONES[tActual.estadoActual] || { asignado: [], creador: [] }
   const posibles = [...new Set([...(esAsig ? trans.asignado : []), ...(esCrea ? trans.creador : [])])]
+  const esCerrada = ['finalizada','cancelada'].includes(tActual.estadoActual)
 
-  const CLCOLORS = { pendiente:'#B7950B', en_progreso:'#1A5276', esperando_respuesta:'#C8610A', finalizada:'#1E7E4E', no_puedo:'#6D28D9', vencida:'#C0392B', cancelada:'#9C9690' }
+  const CLCOLORS = {
+    pendiente:'#B7950B', en_progreso:'#1A5276', esperando_respuesta:'#C8610A',
+    finalizada:'#1E7E4E', no_puedo:'#6D28D9', vencida:'#C0392B', cancelada:'#9C9690',
+  }
 
   const confirmar = () => {
     if (!nuevoEst) { setError('Seleccioná un estado.'); return }
     if (nuevoEst === 'no_puedo' && !comentario.trim()) { setError('El comentario es obligatorio para este estado.'); return }
     cambiarEstado(tActual.id, nuevoEst, comentario, esGral)
     setShowCambio(false); setNuevoEst(''); setComentario(''); setError('')
+  }
+
+  const handleEliminar = () => {
+    onEliminar(tActual.id)
+    onClose()
   }
 
   return (
@@ -46,10 +55,10 @@ function ModalDetalle({ tarea, usuarios, catList, usuActivo, esGral, cambiarEsta
       {/* Meta */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 14 }}>
         {[
-          { l: 'Asignada a', content: <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Avatar usuario={asignado} size={22}/><span style={{ fontSize: 12, fontWeight: 700 }}>{asignado?.nombre || '—'}</span></div> },
-          { l: 'Creada por',  content: <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Avatar usuario={creador}  size={22}/><span style={{ fontSize: 12, fontWeight: 700 }}>{creador?.nombre  || '—'}</span></div> },
-          { l: 'Asignada el', content: <div style={{ fontSize: 13, fontWeight: 700 }}>{fmtDateShort(tActual.creadoEn)}</div> },
-          { l: 'Respuesta esperada', content: <div style={{ fontSize: 13, fontWeight: 700, color: isOverdue(tActual.fechaLimite) && !['finalizada','cancelada'].includes(tActual.estadoActual) ? C.red : C.ink }}>{fmtDateShort(tActual.fechaLimite)}</div>, warn: isOverdue(tActual.fechaLimite) },
+          { l: 'Asignada a',         content: <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Avatar usuario={asignado} size={22}/><span style={{ fontSize: 12, fontWeight: 700 }}>{asignado?.nombre || '—'}</span></div> },
+          { l: 'Creada por',         content: <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Avatar usuario={creador}  size={22}/><span style={{ fontSize: 12, fontWeight: 700 }}>{creador?.nombre  || '—'}</span></div> },
+          { l: 'Asignada el',        content: <div style={{ fontSize: 13, fontWeight: 700 }}>{fmtDateShort(tActual.creadoEn)}</div> },
+          { l: 'Respuesta esperada', content: <div style={{ fontSize: 13, fontWeight: 700, color: isOverdue(tActual.fechaLimite) && !esCerrada ? C.red : C.ink }}>{fmtDateShort(tActual.fechaLimite)}</div>, warn: isOverdue(tActual.fechaLimite) && !esCerrada },
         ].map(({ l, content, warn }) => (
           <div key={l} style={{ background: warn ? C.redL : C.bg, borderRadius: 9, padding: '8px 11px' }}>
             <div style={{ fontSize: 10, color: C.light, marginBottom: 4 }}>{l}</div>
@@ -105,35 +114,30 @@ function ModalDetalle({ tarea, usuarios, catList, usuActivo, esGral, cambiarEsta
 
       {/* Cambiar estado */}
       {!showCambio && posibles.length > 0 && (
-        <button onClick={() => setShowCambio(true)} style={{ width: '100%', padding: '12px 0', background: C.amber, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}>
+        <button onClick={() => setShowCambio(true)} style={{ width: '100%', padding: '12px 0', background: C.amber, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 800, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit', marginBottom: 10 }}>
           Actualizar estado
         </button>
       )}
-      {!showCambio && posibles.length === 0 && (
-        <div style={{ textAlign: 'center', fontSize: 12, color: C.light, padding: '8px 0' }}>
-          {['finalizada','cancelada'].includes(tActual.estadoActual) ? 'Tarea cerrada.' : 'Cambiá el usuario activo para modificar el estado.'}
+      {!showCambio && posibles.length === 0 && !esCerrada && (
+        <div style={{ textAlign: 'center', fontSize: 12, color: C.light, padding: '8px 0 14px' }}>
+          Cambiá el usuario activo para modificar el estado.
         </div>
       )}
       {showCambio && (
-        <div>
+        <div style={{ marginBottom: 12 }}>
           <SectionLabel>Nuevo estado</SectionLabel>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 12 }}>
             {posibles.map(est => {
               const e = ESTADOS[est]
               return (
-                <button key={est} onClick={() => setNuevoEst(est)} style={{
-                  padding: '7px 13px', borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
-                  border: `2px solid ${nuevoEst === est ? e.color : C.border}`,
-                  background: nuevoEst === est ? e.bg : 'none',
-                  color: nuevoEst === est ? e.color : C.mid,
-                }}>
+                <button key={est} onClick={() => setNuevoEst(est)} style={{ padding: '7px 13px', borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', border: `2px solid ${nuevoEst === est ? e.color : C.border}`, background: nuevoEst === est ? e.bg : 'none', color: nuevoEst === est ? e.color : C.mid }}>
                   {e.label}
                 </button>
               )
             })}
           </div>
           <textarea value={comentario} onChange={e => setComentario(e.target.value)}
-            placeholder={nuevoEst === 'no_puedo' ? 'Comentario obligatorio — explicá por qué no podés...' : 'Comentario opcional...'}
+            placeholder={nuevoEst === 'no_puedo' ? 'Comentario obligatorio...' : 'Comentario opcional...'}
             rows={3} style={{ width: '100%', padding: '9px 11px', background: '#FAFAF7', border: `1.5px solid ${C.border}`, borderRadius: 9, color: C.ink, fontSize: 13, fontFamily: 'inherit', resize: 'none', marginBottom: 8 }}/>
           {error && <div style={{ fontSize: 12, color: C.red, marginBottom: 8 }}>{error}</div>}
           <div style={{ display: 'flex', gap: 9 }}>
@@ -142,16 +146,35 @@ function ModalDetalle({ tarea, usuarios, catList, usuActivo, esGral, cambiarEsta
           </div>
         </div>
       )}
+
+      {/* ── Eliminar tarea ── */}
+      <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14, marginTop: esCerrada ? 0 : 4 }}>
+        {!confirmDel ? (
+          <button onClick={() => setConfirmDel(true)} style={{ width: '100%', padding: '11px', background: 'none', border: `1.5px solid ${C.border}`, borderRadius: 10, color: C.red, fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
+            🗑 Eliminar tarea
+          </button>
+        ) : (
+          <div style={{ background: C.redL, border: `1px solid ${C.red}33`, borderRadius: 10, padding: '13px 14px' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.red, marginBottom: 4 }}>¿Eliminar esta tarea?</div>
+            <div style={{ fontSize: 12, color: C.mid, marginBottom: 12 }}>Se borrará permanentemente con todo su historial. Esta acción no se puede deshacer.</div>
+            <div style={{ display: 'flex', gap: 9 }}>
+              <button onClick={handleEliminar} style={{ flex: 1, padding: '10px', background: C.red, color: '#fff', border: 'none', borderRadius: 9, fontWeight: 800, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>
+                Sí, eliminar
+              </button>
+              <button onClick={() => setConfirmDel(false)} style={{ padding: '10px 16px', background: 'none', border: `1.5px solid ${C.border}`, borderRadius: 9, fontWeight: 700, fontSize: 13, cursor: 'pointer', color: C.mid, fontFamily: 'inherit' }}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </Sheet>
   )
 }
 
 // ── Modal crear/editar tarea ───────────────────────────────────────────────────
-function ModalEditar({ tarea, usuarios, catList, usuActivo, esGral, onSave, onClose, uid, now, setTObra, setTGral, tareasObra, tareasGral }) {
-  const empty = {
-    titulo: '', desc: '', catId: catList[0]?.id || '',
-    asignadoId: usuActivo, fechaLimite: todayISO(7), prioridad: 'normal',
-  }
+function ModalEditar({ tarea, usuarios, catList, usuActivo, esGral, onSave, onClose, uid, now }) {
+  const empty = { titulo: '', desc: '', catId: catList[0]?.id || '', asignadoId: usuActivo, fechaLimite: todayISO(7), prioridad: 'normal' }
   const [f, setF]       = useState(tarea ? { titulo: tarea.titulo, desc: tarea.desc || '', catId: tarea.catId, asignadoId: tarea.asignadoId, fechaLimite: tarea.fechaLimite, prioridad: tarea.prioridad } : empty)
   const [adjPend, setAdj] = useState([])
   const [error, setError] = useState('')
@@ -237,18 +260,26 @@ function ModalEditar({ tarea, usuarios, catList, usuActivo, esGral, onSave, onCl
 
 // ── Tab principal ──────────────────────────────────────────────────────────────
 export default function TabTareas({ obra, tareasObra, tareasGral, usuarios, usuActivo, cambiarEstado, setTObra, setTGral, catGral, addLog, uid, now, esGral, obraActiva }) {
-  const [filtEst,    setFiltEst]   = useState('all')
-  const [filtCat,    setFiltCat]   = useState('all')
-  const [filtUser,   setFiltUser]  = useState('all')
-  const [buscar,     setBuscar]    = useState('')
-  const [detalle,    setDetalle]   = useState(null)
-  const [editando,   setEditando]  = useState(null)
-  const [creando,    setCreando]   = useState(false)
+  const [filtEst,   setFiltEst]  = useState('all')
+  const [filtCat,   setFiltCat]  = useState('all')
+  const [filtUser,  setFiltUser] = useState('all')
+  const [buscar,    setBuscar]   = useState('')
+  const [detalle,   setDetalle]  = useState(null)
+  const [editando,  setEditando] = useState(null)
+  const [creando,   setCreando]  = useState(false)
 
   const tareas  = esGral ? tareasGral : tareasObra.filter(t => t.obraId === obraActiva)
   const catList = esGral ? catGral    : (obra?.catTareas || [])
-  const setArr  = esGral ? setTGral   : v => setTObra(v)
   const allArr  = esGral ? tareasGral : tareasObra
+
+  // ── Eliminar tarea ──────────────────────────────────────────────────────────
+  const eliminarTarea = useCallback((id) => {
+    const nuevaLista = allArr.filter(t => t.id !== id)
+    if (esGral) setTGral(nuevaLista)
+    else        setTObra(nuevaLista)
+    const t = allArr.find(x => x.id === id)
+    addLog('tarea', `Tarea eliminada: "${t?.titulo}"`, esGral ? 'General' : obra?.nombre)
+  }, [allArr, esGral, setTGral, setTObra, addLog, obra])
 
   const filtradas = tareas.filter(t => {
     if (filtEst  !== 'all' && t.estadoActual !== filtEst)  return false
@@ -262,11 +293,11 @@ export default function TabTareas({ obra, tareasObra, tareasGral, usuarios, usuA
   })
 
   const kpis = [
-    { l: 'Total',      v: tareas.length,                                                             c: C.ink   },
-    { l: 'Pendiente',  v: tareas.filter(t => t.estadoActual === 'pendiente').length,                 c: C.gold  },
-    { l: 'En curso',   v: tareas.filter(t => ['en_progreso','esperando_respuesta'].includes(t.estadoActual)).length, c: C.blue  },
-    { l: 'Vencidas',   v: tareas.filter(t => t.estadoActual === 'vencida').length,                   c: C.red   },
-    { l: 'Listas',     v: tareas.filter(t => t.estadoActual === 'finalizada').length,                c: C.green },
+    { l: 'Total',     v: tareas.length,                                                                    c: C.ink   },
+    { l: 'Pendiente', v: tareas.filter(t => t.estadoActual === 'pendiente').length,                        c: C.gold  },
+    { l: 'En curso',  v: tareas.filter(t => ['en_progreso','esperando_respuesta'].includes(t.estadoActual)).length, c: C.blue  },
+    { l: 'Vencidas',  v: tareas.filter(t => t.estadoActual === 'vencida').length,                          c: C.red   },
+    { l: 'Listas',    v: tareas.filter(t => t.estadoActual === 'finalizada').length,                       c: C.green },
   ]
 
   const crearTarea = (f, adjPend) => {
@@ -279,7 +310,8 @@ export default function TabTareas({ obra, tareasObra, tareasGral, usuarios, usuA
       ...(esGral ? {} : { obraId: obraActiva }),
       changelog: [{ id: uid(), estado: 'pendiente', usuarioId: usuActivo, ts: now(), comentario: 'Tarea creada y asignada' }],
     }
-    setArr(esGral ? [...tareasGral, t] : [...allArr, t])
+    if (esGral) setTGral([...tareasGral, t])
+    else        setTObra([...allArr, t])
     addLog('tarea', `Nueva tarea: "${f.titulo}"`, esGral ? 'General' : obra?.nombre)
   }
 
@@ -290,7 +322,8 @@ export default function TabTareas({ obra, tareasObra, tareasGral, usuarios, usuA
       adjuntos: [...(t.adjuntos || []), ...(adjPend || [])],
       changelog: [...t.changelog, { id: uid(), estado: t.estadoActual, usuarioId: usuActivo, ts: now(), comentario: 'Tarea editada' }],
     })
-    setArr(esGral ? upd(tareasGral) : upd(allArr))
+    if (esGral) setTGral(upd(tareasGral))
+    else        setTObra(upd(allArr))
     addLog('tarea', `Tarea editada: "${f.titulo}"`)
     setDetalle(null)
   }
@@ -345,34 +378,49 @@ export default function TabTareas({ obra, tareasObra, tareasGral, usuarios, usuA
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {filtradas.map(t => {
-          const asig = usuarios.find(u => u.id === t.asignadoId)
-          const cat  = catList.find(c => c.id === t.catId)
-          const e    = ESTADOS[t.estadoActual] || ESTADOS.pendiente
-          const p    = PRIORIDADES[t.prioridad] || PRIORIDADES.normal
-          const venc = isOverdue(t.fechaLimite) && !['finalizada','cancelada'].includes(t.estadoActual)
+          const asig      = usuarios.find(u => u.id === t.asignadoId)
+          const cat       = catList.find(c => c.id === t.catId)
+          const e         = ESTADOS[t.estadoActual] || ESTADOS.pendiente
+          const p         = PRIORIDADES[t.prioridad] || PRIORIDADES.normal
+          const venc      = isOverdue(t.fechaLimite) && !['finalizada','cancelada'].includes(t.estadoActual)
+          const esCerrada = ['finalizada','cancelada'].includes(t.estadoActual)
           return (
-            <div key={t.id} onClick={() => setDetalle(t)} style={{
+            <div key={t.id} style={{
               background: C.card, cursor: 'pointer',
-              border: `1.5px solid ${t.estadoActual === 'vencida' ? C.red + '44' : t.estadoActual === 'esperando_respuesta' ? C.amber + '44' : C.border}`,
+              border: `1.5px solid ${t.estadoActual === 'vencida' ? C.red + '44' : t.estadoActual === 'esperando_respuesta' ? C.amber + '44' : esCerrada ? C.border : C.border}`,
               borderRadius: 13, padding: '12px 14px',
-              transition: 'border-color .15s',
+              opacity: esCerrada ? .75 : 1,
+              transition: 'opacity .15s',
             }}>
-              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 5 }}>
-                <span style={{ background: e.bg, color: e.color, borderRadius: 4, padding: '1px 6px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>{e.label}</span>
-                {t.prioridad !== 'normal' && <span style={{ background: p.bg, color: p.color, borderRadius: 4, padding: '1px 6px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>{p.label}</span>}
-                {cat && <span style={{ background: cat.color + '22', color: cat.color, borderRadius: 4, padding: '1px 6px', fontSize: 10, fontWeight: 700 }}>{cat.label}</span>}
-              </div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: t.estadoActual === 'cancelada' ? 'line-through' : 'none' }}>{t.titulo}</div>
-              {t.desc && <div style={{ fontSize: 11, color: C.mid, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>{t.desc}</div>}
-              <AdjPills adjuntos={t.adjuntos}/>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <Avatar usuario={asig} size={20}/>
-                  <span style={{ fontSize: 11, color: C.mid }}>{asig?.nombre}</span>
-                  <span style={{ fontSize: 11, color: venc ? C.red : C.light }}>· {fmtDateShort(t.fechaLimite)}</span>
+              <div onClick={() => setDetalle(t)}>
+                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 5 }}>
+                  <span style={{ background: e.bg, color: e.color, borderRadius: 4, padding: '1px 6px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>{e.label}</span>
+                  {t.prioridad !== 'normal' && <span style={{ background: p.bg, color: p.color, borderRadius: 4, padding: '1px 6px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>{p.label}</span>}
+                  {cat && <span style={{ background: cat.color + '22', color: cat.color, borderRadius: 4, padding: '1px 6px', fontSize: 10, fontWeight: 700 }}>{cat.label}</span>}
                 </div>
-                <span style={{ fontSize: 10, color: C.light }}>{t.changelog.length} cambios</span>
+                <div style={{ fontWeight: 700, fontSize: 14, color: esCerrada ? C.mid : C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: t.estadoActual === 'cancelada' ? 'line-through' : 'none' }}>{t.titulo}</div>
+                {t.desc && <div style={{ fontSize: 11, color: C.mid, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>{t.desc}</div>}
+                <AdjPills adjuntos={t.adjuntos}/>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <Avatar usuario={asig} size={20}/>
+                    <span style={{ fontSize: 11, color: C.mid }}>{asig?.nombre}</span>
+                    <span style={{ fontSize: 11, color: venc ? C.red : C.light }}>· {fmtDateShort(t.fechaLimite)}</span>
+                  </div>
+                  <span style={{ fontSize: 10, color: C.light }}>{t.changelog.length} cambios</span>
+                </div>
               </div>
+
+              {/* Botón eliminar rápido — visible en tareas cerradas */}
+              {esCerrada && (
+                <div style={{ marginTop: 9, paddingTop: 9, borderTop: `1px solid ${C.border}`, display: 'flex', justifyContent: 'flex-end' }}>
+                  <button
+                    onClick={e => { e.stopPropagation(); if(window.confirm(`¿Eliminar "${t.titulo}"?`)) eliminarTarea(t.id) }}
+                    style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 7, padding: '4px 11px', color: C.red, fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    🗑 Eliminar
+                  </button>
+                </div>
+              )}
             </div>
           )
         })}
@@ -387,13 +435,14 @@ export default function TabTareas({ obra, tareasObra, tareasGral, usuarios, usuA
           tareasObra={tareasObra} tareasGral={tareasGral}
           onClose={() => setDetalle(null)}
           onEditar={() => { setEditando(detalle); setDetalle(null) }}
+          onEliminar={eliminarTarea}
         />
       )}
       {editando && (
-        <ModalEditar tarea={editando} usuarios={usuarios} catList={catList} usuActivo={usuActivo} esGral={esGral} uid={uid} now={now} setTObra={setTObra} setTGral={setTGral} tareasObra={tareasObra} tareasGral={tareasGral} onSave={editarTarea} onClose={() => setEditando(null)}/>
+        <ModalEditar tarea={editando} usuarios={usuarios} catList={catList} usuActivo={usuActivo} esGral={esGral} uid={uid} now={now} onSave={editarTarea} onClose={() => setEditando(null)}/>
       )}
       {creando && (
-        <ModalEditar tarea={null} usuarios={usuarios} catList={catList} usuActivo={usuActivo} esGral={esGral} uid={uid} now={now} setTObra={setTObra} setTGral={setTGral} tareasObra={tareasObra} tareasGral={tareasGral} onSave={crearTarea} onClose={() => setCreando(false)}/>
+        <ModalEditar tarea={null} usuarios={usuarios} catList={catList} usuActivo={usuActivo} esGral={esGral} uid={uid} now={now} onSave={crearTarea} onClose={() => setCreando(false)}/>
       )}
     </div>
   )
