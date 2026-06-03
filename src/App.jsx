@@ -3,7 +3,8 @@ import {
   lsGet, lsSet, uid, now, todayISO, isOverdue,
   ESTADOS, PRIORIDADES, TRANSICIONES, HIST_TIPOS,
   SEED_OBRAS, SEED_USUARIOS, SEED_ACTIVIDADES, SEED_MATERIALES,
-  SEED_TAREAS_OBRA, SEED_TAREAS_GENERALES, SEED_CAT_GENERALES, SEED_HISTORIAL,
+  SEED_TAREAS_OBRA, SEED_TAREAS_GENERALES, SEED_CAT_GENERALES,
+  SEED_HISTORIAL, SEED_INFORMES,
 } from './store.js'
 import { FIREBASE_HABILITADO, KEYS, fbSet, fbSubscribe, seedIfEmpty } from './firebase.js'
 import { C, Clock, Avatar } from './ui.jsx'
@@ -14,6 +15,7 @@ import TabInventario  from './components/TabInventario.jsx'
 import TabObras       from './components/TabObras.jsx'
 import TabHistorial   from './components/TabHistorial.jsx'
 import TabConfig      from './components/TabConfig.jsx'
+import TabInformes    from './components/TabInformes.jsx'
 import SelectUser     from './components/SelectUser.jsx'
 
 const TABS = [
@@ -22,10 +24,15 @@ const TABS = [
   { id: 'tareas',     label: 'Tareas obra',  ic: '✅' },
   { id: 'generales',  label: 'Tareas gral.', ic: '📝', global: true },
   { id: 'inventario', label: 'Inventario',   ic: '📦' },
-  { id: 'historial',  label: 'Historial',    ic: '🕓' },
+  { id: 'informes',   label: 'Informes',     ic: '📄' },
   { id: 'obras',      label: 'Mis obras',    ic: '🏗' },
   { id: 'config',     label: 'Config.',      ic: '⚙️' },
 ]
+
+// Clave de Firebase para informes
+const FB_KEYS_EXTRA = {
+  informes: 'obracontrol_v2/informes',
+}
 
 export default function App() {
   const [obras,       setObras]      = useState(() => lsGet('oc_obras',     SEED_OBRAS))
@@ -36,16 +43,19 @@ export default function App() {
   const [tareasGral,  setTGral]      = useState(() => lsGet('oc_tarea_gral',SEED_TAREAS_GENERALES))
   const [catGral,     setCatGral]    = useState(() => lsGet('oc_cat_gral',  SEED_CAT_GENERALES))
   const [historial,   setHist]       = useState(() => lsGet('oc_hist',      SEED_HISTORIAL))
+  const [informes,    setInformes]   = useState(() => lsGet('oc_informes',  SEED_INFORMES))
   const [obraActiva,  setObraActiva] = useState(() => lsGet('oc_obra_act',  'o1'))
   const [usuActivo,   setUsuActivo]  = useState(() => lsGet('oc_usu_act',   'u1'))
   const [tab,         setTab]        = useState('dashboard')
   const [showUserSel, setShowUserSel]= useState(false)
   const [syncStatus,  setSyncStatus] = useState(FIREBASE_HABILITADO ? 'connecting' : 'local')
 
-  // Refs para acceder a los setters y usuActivo dentro de callbacks sin dependencias
-  const S = useRef({ setObras, setUsuarios, setAct, setMat, setTObra, setTGral, setCatGral, setHist })
+  const S = useRef({
+    setObras, setUsuarios, setAct, setMat,
+    setTObra, setTGral, setCatGral, setHist, setInformes,
+  })
   useEffect(() => {
-    S.current = { setObras, setUsuarios, setAct, setMat, setTObra, setTGral, setCatGral, setHist }
+    S.current = { setObras, setUsuarios, setAct, setMat, setTObra, setTGral, setCatGral, setHist, setInformes }
   })
   const usuRef = useRef(usuActivo)
   useEffect(() => { usuRef.current = usuActivo }, [usuActivo])
@@ -57,16 +67,17 @@ export default function App() {
     if (FIREBASE_HABILITADO) fbSet(fbKey, value)
   }, [])
 
-  const writeObras   = useCallback(v => write(setObras,    'oc_obras',      KEYS.obras,       v), [write])
-  const writeUsu     = useCallback(v => write(setUsuarios, 'oc_usuarios',   KEYS.usuarios,    v), [write])
-  const writeAct     = useCallback(v => write(setAct,      'oc_act',        KEYS.actividades, v), [write])
-  const writeMat     = useCallback(v => write(setMat,      'oc_mats',       KEYS.materiales,  v), [write])
-  const writeTObra   = useCallback(v => write(setTObra,    'oc_tarea_obra', KEYS.tareasObra,  v), [write])
-  const writeTGral   = useCallback(v => write(setTGral,    'oc_tarea_gral', KEYS.tareasGral,  v), [write])
-  const writeCatGral = useCallback(v => write(setCatGral,  'oc_cat_gral',   KEYS.catGral,     v), [write])
-  const writeHist    = useCallback(v => write(setHist,     'oc_hist',       KEYS.historial,   v), [write])
-  const setObraAct   = useCallback(id => { setObraActiva(id); lsSet('oc_obra_act', id) }, [])
-  const setUsuAct    = useCallback(id => { setUsuActivo(id);  lsSet('oc_usu_act',  id) }, [])
+  const writeObras    = useCallback(v => write(setObras,    'oc_obras',      KEYS.obras,           v), [write])
+  const writeUsu      = useCallback(v => write(setUsuarios, 'oc_usuarios',   KEYS.usuarios,        v), [write])
+  const writeAct      = useCallback(v => write(setAct,      'oc_act',        KEYS.actividades,     v), [write])
+  const writeMat      = useCallback(v => write(setMat,      'oc_mats',       KEYS.materiales,      v), [write])
+  const writeTObra    = useCallback(v => write(setTObra,    'oc_tarea_obra', KEYS.tareasObra,      v), [write])
+  const writeTGral    = useCallback(v => write(setTGral,    'oc_tarea_gral', KEYS.tareasGral,      v), [write])
+  const writeCatGral  = useCallback(v => write(setCatGral,  'oc_cat_gral',   KEYS.catGral,         v), [write])
+  const writeHist     = useCallback(v => write(setHist,     'oc_hist',       KEYS.historial,       v), [write])
+  const writeInformes = useCallback(v => write(setInformes, 'oc_informes',   FB_KEYS_EXTRA.informes, v), [write])
+  const setObraAct    = useCallback(id => { setObraActiva(id); lsSet('oc_obra_act', id) }, [])
+  const setUsuAct     = useCallback(id => { setUsuActivo(id);  lsSet('oc_usu_act',  id) }, [])
 
   // ── addLog ────────────────────────────────────────────────────────────────
   const addLog = useCallback((tipo, det, extra = '') => {
@@ -78,51 +89,59 @@ export default function App() {
     })
   }, [])
 
-  // ── Firebase: PRIMERO suscribir, DESPUES seed ─────────────────────────────
+  // ── Firebase: suscripciones ───────────────────────────────────────────────
   useEffect(() => {
     if (!FIREBASE_HABILITADO) return
     const unsubs = []
 
-    // Mapa: clave Firebase → setter de React + clave localStorage
-    const COLLECTIONS = [
-      { key: KEYS.obras,       ls: 'oc_obras',      setter: v => S.current.setObras(v)    },
-      { key: KEYS.usuarios,    ls: 'oc_usuarios',   setter: v => S.current.setUsuarios(v) },
-      { key: KEYS.actividades, ls: 'oc_act',        setter: v => S.current.setAct(v)      },
-      { key: KEYS.materiales,  ls: 'oc_mats',       setter: v => S.current.setMat(v)      },
-      { key: KEYS.tareasObra,  ls: 'oc_tarea_obra', setter: v => S.current.setTObra(v)    },
-      { key: KEYS.tareasGral,  ls: 'oc_tarea_gral', setter: v => S.current.setTGral(v)    },
-      { key: KEYS.catGral,     ls: 'oc_cat_gral',   setter: v => S.current.setCatGral(v)  },
-      { key: KEYS.historial,   ls: 'oc_hist',       setter: v => S.current.setHist(v)     },
-    ]
+    const connect = async () => {
+      try {
+        const seeds = {
+          obras:       lsGet('oc_obras',      SEED_OBRAS),
+          usuarios:    lsGet('oc_usuarios',   SEED_USUARIOS),
+          actividades: lsGet('oc_act',        SEED_ACTIVIDADES),
+          materiales:  lsGet('oc_mats',       SEED_MATERIALES),
+          tareasObra:  lsGet('oc_tarea_obra', SEED_TAREAS_OBRA),
+          tareasGral:  lsGet('oc_tarea_gral', SEED_TAREAS_GENERALES),
+          catGral:     lsGet('oc_cat_gral',   SEED_CAT_GENERALES),
+          historial:   lsGet('oc_hist',       SEED_HISTORIAL),
+          informes:    lsGet('oc_informes',   SEED_INFORMES),
+        }
 
-    // PASO 1: Registrar TODAS las suscripciones primero
-    // Cuando Firebase manda un valor → actualiza localStorage + React state
-    COLLECTIONS.forEach(({ key, ls, setter }) => {
-      const unsub = fbSubscribe(key, value => {
-        lsSet(ls, value)   // caché offline
-        setter(value)      // actualiza UI
-      })
-      unsubs.push(unsub)
-    })
+        const COLLECTIONS = [
+          { key: KEYS.obras,                 ls: 'oc_obras',      setter: v => S.current.setObras(v)    },
+          { key: KEYS.usuarios,              ls: 'oc_usuarios',   setter: v => S.current.setUsuarios(v) },
+          { key: KEYS.actividades,           ls: 'oc_act',        setter: v => S.current.setAct(v)      },
+          { key: KEYS.materiales,            ls: 'oc_mats',       setter: v => S.current.setMat(v)      },
+          { key: KEYS.tareasObra,            ls: 'oc_tarea_obra', setter: v => S.current.setTObra(v)    },
+          { key: KEYS.tareasGral,            ls: 'oc_tarea_gral', setter: v => S.current.setTGral(v)    },
+          { key: KEYS.catGral,               ls: 'oc_cat_gral',   setter: v => S.current.setCatGral(v)  },
+          { key: KEYS.historial,             ls: 'oc_hist',       setter: v => S.current.setHist(v)     },
+          { key: FB_KEYS_EXTRA.informes,     ls: 'oc_informes',   setter: v => S.current.setInformes(v) },
+        ]
 
-    setSyncStatus('synced')
+        COLLECTIONS.forEach(({ key, ls, setter }) => {
+          const unsub = fbSubscribe(key, value => { lsSet(ls, value); setter(value) })
+          unsubs.push(unsub)
+        })
 
-    // PASO 2: Seed por colección — solo escribe si esa colección está vacía
-    // Se hace DESPUES de suscribirse para no perder eventos
-    const seeds = [
-      { key: KEYS.obras,       value: lsGet('oc_obras',      SEED_OBRAS)           },
-      { key: KEYS.usuarios,    value: lsGet('oc_usuarios',   SEED_USUARIOS)        },
-      { key: KEYS.actividades, value: lsGet('oc_act',        SEED_ACTIVIDADES)     },
-      { key: KEYS.materiales,  value: lsGet('oc_mats',       SEED_MATERIALES)      },
-      { key: KEYS.tareasObra,  value: lsGet('oc_tarea_obra', SEED_TAREAS_OBRA)     },
-      { key: KEYS.tareasGral,  value: lsGet('oc_tarea_gral', SEED_TAREAS_GENERALES)},
-      { key: KEYS.catGral,     value: lsGet('oc_cat_gral',   SEED_CAT_GENERALES)  },
-      { key: KEYS.historial,   value: lsGet('oc_hist',       SEED_HISTORIAL)       },
-    ]
-    seeds.forEach(({ key, value }) => seedIfEmpty(key, value))
+        // Seeds por colección
+        Object.entries(seeds).forEach(([k, v]) => {
+          const col = COLLECTIONS.find(c => c.ls === `oc_${k}` || c.key.endsWith(k))
+          if (col) seedIfEmpty(col.key, v)
+        })
+        seedIfEmpty(FB_KEYS_EXTRA.informes, seeds.informes)
 
+        setSyncStatus('synced')
+      } catch (e) {
+        console.warn('[Firebase] Error:', e)
+        setSyncStatus('error')
+      }
+    }
+
+    connect()
     return () => unsubs.forEach(u => u())
-  }, []) // Solo al montar
+  }, [])
 
   // ── Marcar vencidas ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -130,11 +149,10 @@ export default function App() {
     const markOverdue = arr => {
       const result = arr.map(t =>
         !['finalizada','cancelada','vencida'].includes(t.estadoActual) && t.fechaLimite < today
-          ? { ...t, estadoActual: 'vencida', changelog: [...t.changelog, { id: uid(), estado: 'vencida', usuarioId: 'system', ts: now(), comentario: 'Vencimiento automático por fecha' }] }
+          ? { ...t, estadoActual: 'vencida', changelog: [...t.changelog, { id: uid(), estado: 'vencida', usuarioId: 'system', ts: now(), comentario: 'Vencimiento automático' }] }
           : t
       )
-      const changed = result.some((t, i) => t !== arr[i])
-      return changed ? result : arr
+      return result.some((t,i) => t !== arr[i]) ? result : arr
     }
     const to = markOverdue(lsGet('oc_tarea_obra', SEED_TAREAS_OBRA))
     const tg = markOverdue(lsGet('oc_tarea_gral', SEED_TAREAS_GENERALES))
@@ -162,7 +180,7 @@ export default function App() {
 
   const CTX = {
     obra, obras, usuarios, actividades, materiales,
-    tareasObra, tareasGral, catGral, historial,
+    tareasObra, tareasGral, catGral, historial, informes,
     obraActiva, usuActivo, usuObj,
     setObras:    writeObras,
     setUsuarios: writeUsu,
@@ -172,17 +190,21 @@ export default function App() {
     setTGral:    writeTGral,
     setCatGral:  writeCatGral,
     setHist:     writeHist,
+    setInformes: writeInformes,
     setObraAct, setUsuAct, addLog, cambiarEstado,
     ESTADOS, PRIORIDADES, TRANSICIONES, HIST_TIPOS,
     uid, now, todayISO, isOverdue,
   }
 
   const syncCfg = {
-    local:      { color: C.light, label: 'LOCAL'  },
-    connecting: { color: C.gold,  label: '...'    },
-    synced:     { color: C.green, label: 'LIVE'   },
-    error:      { color: C.red,   label: 'OFF'    },
+    local:      { color: C.light, label: 'LOCAL' },
+    connecting: { color: C.gold,  label: '...'   },
+    synced:     { color: C.green, label: 'LIVE'  },
+    error:      { color: C.red,   label: 'OFF'   },
   }[syncStatus]
+
+  // Tabs que no muestran selector de obra
+  const sinObraBar = ['generales','obras','config','informes']
 
   return (
     <div style={{ background: C.bg, minHeight: '100vh', fontFamily: "'DM Sans',-apple-system,BlinkMacSystemFont,sans-serif", color: C.ink, maxWidth: 480, margin: '0 auto', display: 'flex', flexDirection: 'column' }}>
@@ -207,7 +229,11 @@ export default function App() {
             <div>
               <div style={{ fontWeight: 800, fontSize: 14, color: '#fff', lineHeight: 1.1 }}>ObraControl</div>
               <div style={{ fontSize: 10, color: 'rgba(255,255,255,.4)' }}>
-                {tab === 'generales' ? 'Tareas generales' : tab === 'obras' ? 'Mis obras' : tab === 'config' ? 'Configuración' : obra?.nombre}
+                {tab === 'generales' ? 'Tareas generales'
+                  : tab === 'obras'    ? 'Mis obras'
+                  : tab === 'config'   ? 'Configuración'
+                  : tab === 'informes' ? 'Informes de obra'
+                  : obra?.nombre}
               </div>
             </div>
           </div>
@@ -227,7 +253,8 @@ export default function App() {
           </div>
         </div>
 
-        {!['generales','obras','config'].includes(tab) ? (
+        {/* Banda contextual */}
+        {!sinObraBar.includes(tab) ? (
           <div style={{ background: C.amberL, borderBottom: `1px solid ${C.border}`, padding: '5px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: C.amber, whiteSpace: 'nowrap' }}>OBRA:</span>
             <select value={obraActiva} onChange={e => setObraAct(e.target.value)} style={{ flex: 1, background: 'none', border: 'none', fontSize: 12, fontWeight: 700, color: C.amber, cursor: 'pointer', fontFamily: 'inherit' }}>
@@ -238,9 +265,17 @@ export default function App() {
           <div style={{ background: C.purpleL, borderBottom: `1px solid ${C.border}`, padding: '5px 14px' }}>
             <span style={{ fontSize: 11, color: C.purple, fontWeight: 700 }}>📝 Tareas generales — independientes de obras</span>
           </div>
+        ) : tab === 'informes' ? (
+          <div style={{ background: '#E8F5EE', borderBottom: `1px solid ${C.border}`, padding: '5px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: C.green, whiteSpace: 'nowrap' }}>OBRA:</span>
+            <select value={obraActiva} onChange={e => setObraAct(e.target.value)} style={{ flex: 1, background: 'none', border: 'none', fontSize: 12, fontWeight: 700, color: C.green, cursor: 'pointer', fontFamily: 'inherit' }}>
+              {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+            </select>
+          </div>
         ) : null}
       </div>
 
+      {/* Banner Firebase no configurado */}
       {!FIREBASE_HABILITADO && (
         <div style={{ background: C.goldL, borderBottom: `1px solid ${C.gold}44`, padding: '9px 14px', display: 'flex', gap: 9, alignItems: 'center' }}>
           <span style={{ fontSize: 14 }}>⚠️</span>
@@ -258,7 +293,7 @@ export default function App() {
         {tab === 'tareas'     && <TabTareas     {...CTX} esGral={false}/>}
         {tab === 'generales'  && <TabTareas     {...CTX} esGral={true}/>}
         {tab === 'inventario' && <TabInventario {...CTX}/>}
-        {tab === 'historial'  && <TabHistorial  {...CTX}/>}
+        {tab === 'informes'   && <TabInformes   {...CTX}/>}
         {tab === 'obras'      && <TabObras      {...CTX}/>}
         {tab === 'config'     && <TabConfig     {...CTX}/>}
       </div>
@@ -267,12 +302,12 @@ export default function App() {
       <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: 480, background: C.card, borderTop: `1px solid ${C.border}`, display: 'flex', zIndex: 100, paddingBottom: 'env(safe-area-inset-bottom)' }}>
         {TABS.map(t => {
           const active  = tab === t.id
-          const acColor = t.global ? C.purple : C.amber
+          const acColor = t.global ? C.purple : t.id === 'informes' ? C.green : C.amber
           return (
-            <button key={t.id} onClick={() => setTab(t.id)} style={{ flex: 1, padding: '8px 2px 10px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, fontFamily: 'inherit', position: 'relative' }}>
+            <button key={t.id} onClick={() => setTab(t.id)} style={{ flex: 1, padding: '8px 1px 10px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, fontFamily: 'inherit', position: 'relative' }}>
               {active && <div style={{ position: 'absolute', top: 0, left: '20%', right: '20%', height: 2, background: acColor, borderRadius: 99 }}/>}
-              <span style={{ fontSize: 16 }}>{t.ic}</span>
-              <span style={{ fontSize: 9, fontWeight: active ? 800 : 600, color: active ? acColor : C.light }}>{t.label}</span>
+              <span style={{ fontSize: 15 }}>{t.ic}</span>
+              <span style={{ fontSize: 8.5, fontWeight: active ? 800 : 600, color: active ? acColor : C.light }}>{t.label}</span>
             </button>
           )
         })}
